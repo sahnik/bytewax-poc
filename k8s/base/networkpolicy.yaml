@@ -1,0 +1,63 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: bytewax-pipeline-egress
+  namespace: bytewax-pipeline
+  labels:
+    app.kubernetes.io/name: bytewax-pipeline
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: bytewax-pipeline
+  policyTypes:
+  - Egress
+  - Ingress
+  
+  # Ingress rules - allow metrics scraping
+  ingress:
+  - from:
+    # Allow Prometheus to scrape metrics
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    # Allow same namespace communication
+    - namespaceSelector:
+        matchLabels:
+          name: bytewax-pipeline
+    ports:
+    - protocol: TCP
+      port: 8000
+  
+  # Egress rules - allow external Kafka and DNS
+  egress:
+  # Allow DNS resolution
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  
+  # Allow external Kafka brokers (adjust IPs/ports as needed)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 9092  # Standard Kafka port
+    - protocol: TCP
+      port: 9093  # SSL Kafka port
+    - protocol: TCP
+      port: 9094  # SASL_SSL Kafka port
+  
+  # Allow HTTPS for certificate validation and external services
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+  
+  # Allow internal cluster communication
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8000

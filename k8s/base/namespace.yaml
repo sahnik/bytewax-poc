@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bytewax-pipeline
+  labels:
+    name: bytewax-pipeline
+    app.kubernetes.io/name: bytewax-pipeline
+    app.kubernetes.io/component: data-processing
+  annotations:
+    description: "Bytewax data processing pipeline namespace"

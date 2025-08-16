@@ -1,0 +1,70 @@
+# Lookup Populator Dockerfile
+# Utility container for populating lookup data in Kafka
+
+# ===== BUILD STAGE =====
+FROM python:3.12-slim as builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    librdkafka-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# ===== PRODUCTION STAGE =====
+FROM python:3.12-slim as production
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    PATH="/opt/venv/bin:$PATH"
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    librdkafka1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy virtual environment
+COPY --from=builder /opt/venv /opt/venv
+
+# Create non-root user for OpenShift
+RUN groupadd -g 1001 populator && \
+    useradd -u 1001 -g populator -m -s /bin/bash populator
+
+# Create application directory
+WORKDIR /app
+
+# Copy application code
+COPY --chown=1001:1001 config/ ./config/
+COPY --chown=1001:1001 utils/populate_lookup.py ./utils/populate_lookup.py
+COPY --chown=1001:1001 utils/__init__.py ./utils/__init__.py
+
+# Switch to non-root user
+USER 1001
+
+# Default command - populate 1000 records
+CMD ["python", "utils/populate_lookup.py", "--count", "1000"]
+
+# Metadata labels
+LABEL name="bytewax-populator" \
+      version="1.0.0" \
+      description="Lookup data populator for Bytewax pipeline" \
+      maintainer="Claude AI Assistant" \
+      io.k8s.description="Populates lookup topic with user profile data" \
+      io.k8s.display-name="Bytewax Lookup Populator" \
+      io.openshift.tags="bytewax,kafka,lookup-data,initialization"

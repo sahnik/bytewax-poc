@@ -1,0 +1,168 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: populate-lookup-data
+  namespace: bytewax-pipeline
+  labels:
+    app.kubernetes.io/name: bytewax-pipeline
+    app.kubernetes.io/component: data-initialization
+    job-type: populate-lookup
+spec:
+  # Job will be cleaned up automatically after 7 days
+  ttlSecondsAfterFinished: 604800
+  
+  # Allow 3 retries if job fails
+  backoffLimit: 3
+  
+  # Job should complete within 10 minutes
+  activeDeadlineSeconds: 600
+  
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bytewax-pipeline
+        app.kubernetes.io/component: data-initialization
+        job-type: populate-lookup
+    spec:
+      restartPolicy: Never
+      
+      # Security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      
+      containers:
+      - name: populate-lookup
+        image: bytewax-populator:latest
+        imagePullPolicy: Always
+        
+        # Override default command to populate more records for production
+        command: ["python", "utils/populate_lookup.py"]
+        args: ["--count", "10000"]
+        
+        # Environment variables from ConfigMap and Secret
+        envFrom:
+        - configMapRef:
+            name: bytewax-config
+        - secretRef:
+            name: bytewax-kafka-credentials
+        
+        # Resource limits
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        
+        # Security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          capabilities:
+            drop:
+            - ALL
+        
+        # Volume mounts for certificates
+        volumeMounts:
+        - name: kafka-certs
+          mountPath: /app/certs
+          readOnly: true
+        - name: tmp-volume
+          mountPath: /tmp
+      
+      volumes:
+      - name: kafka-certs
+        secret:
+          secretName: bytewax-kafka-certs
+          defaultMode: 0400
+      - name: tmp-volume
+        emptyDir: {}
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: test-data-publisher
+  namespace: bytewax-pipeline
+  labels:
+    app.kubernetes.io/name: bytewax-pipeline
+    app.kubernetes.io/component: data-testing
+    job-type: test-publisher
+spec:
+  ttlSecondsAfterFinished: 3600  # Clean up after 1 hour
+  backoffLimit: 2
+  activeDeadlineSeconds: 300  # 5 minutes for testing
+  
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bytewax-pipeline
+        app.kubernetes.io/component: data-testing
+        job-type: test-publisher
+    spec:
+      restartPolicy: Never
+      
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      
+      containers:
+      - name: test-publisher
+        image: bytewax-publisher:latest
+        imagePullPolicy: Always
+        
+        # Publish test data for 5 minutes
+        command: ["python", "utils/data_publisher.py"]
+        args: ["--rate", "50", "--duration", "300"]
+        
+        envFrom:
+        - configMapRef:
+            name: bytewax-config
+        - secretRef:
+            name: bytewax-kafka-credentials
+        
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          capabilities:
+            drop:
+            - ALL
+        
+        volumeMounts:
+        - name: kafka-certs
+          mountPath: /app/certs
+          readOnly: true
+        - name: tmp-volume
+          mountPath: /tmp
+      
+      volumes:
+      - name: kafka-certs
+        secret:
+          secretName: bytewax-kafka-certs
+          defaultMode: 0400
+      - name: tmp-volume
+        emptyDir: {}

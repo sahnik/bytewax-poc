@@ -19,7 +19,7 @@ Usage:
 
 import os
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
 
@@ -61,6 +61,18 @@ class KafkaConfig:
     auto_commit_interval_ms: int        # Offset commit interval
     fetch_max_wait_ms: int             # Fetch timeout (100ms for fast completion)
     fetch_min_bytes: int               # Minimum fetch size (1 byte for low latency)
+    
+    # Security configuration for external Kafka
+    security_protocol: str             # PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL
+    sasl_mechanism: str               # PLAIN, SCRAM-SHA-256, SCRAM-SHA-512, GSSAPI
+    sasl_username: Optional[str]      # SASL username (if using SASL)
+    sasl_password: Optional[str]      # SASL password (if using SASL)
+    ssl_ca_location: Optional[str]    # Path to CA certificate
+    ssl_certificate_location: Optional[str]  # Path to client certificate
+    ssl_key_location: Optional[str]   # Path to client private key
+    ssl_key_password: Optional[str]   # Client key password (if encrypted)
+    ssl_check_hostname: bool          # Verify SSL hostname
+    ssl_verify_mode: str             # SSL verification mode (none, optional, required)
 
     @classmethod
     def from_env(cls) -> "KafkaConfig":
@@ -78,11 +90,65 @@ class KafkaConfig:
             auto_commit_interval_ms=int(os.getenv("KAFKA_AUTO_COMMIT_INTERVAL_MS", "1000")),
             fetch_max_wait_ms=int(os.getenv("KAFKA_FETCH_MAX_WAIT_MS", "100")),
             fetch_min_bytes=int(os.getenv("KAFKA_FETCH_MIN_BYTES", "1")),
+            
+            # Security configuration - defaults for local development
+            security_protocol=os.getenv("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT"),
+            sasl_mechanism=os.getenv("KAFKA_SASL_MECHANISM", "PLAIN"),
+            sasl_username=os.getenv("KAFKA_SASL_USERNAME"),
+            sasl_password=os.getenv("KAFKA_SASL_PASSWORD"),
+            ssl_ca_location=os.getenv("KAFKA_SSL_CA_LOCATION"),
+            ssl_certificate_location=os.getenv("KAFKA_SSL_CERTIFICATE_LOCATION"),
+            ssl_key_location=os.getenv("KAFKA_SSL_KEY_LOCATION"),
+            ssl_key_password=os.getenv("KAFKA_SSL_KEY_PASSWORD"),
+            ssl_check_hostname=os.getenv("KAFKA_SSL_CHECK_HOSTNAME", "true").lower() == "true",
+            ssl_verify_mode=os.getenv("KAFKA_SSL_VERIFY_MODE", "required"),
         )
 
     @property
     def brokers(self) -> List[str]:
         return self.bootstrap_servers.split(",")
+    
+    def get_security_config(self) -> Dict[str, str]:
+        """
+        Get security configuration as a dictionary for Kafka client.
+        
+        Returns:
+            Dict containing security-related Kafka configuration parameters
+        """
+        config = {
+            "security.protocol": self.security_protocol,
+        }
+        
+        # Add SASL configuration if using SASL
+        if "SASL" in self.security_protocol:
+            config["sasl.mechanism"] = self.sasl_mechanism
+            if self.sasl_username:
+                config["sasl.username"] = self.sasl_username
+            if self.sasl_password:
+                config["sasl.password"] = self.sasl_password
+        
+        # Add SSL configuration if using SSL
+        if "SSL" in self.security_protocol:
+            if self.ssl_ca_location:
+                config["ssl.ca.location"] = self.ssl_ca_location
+            if self.ssl_certificate_location:
+                config["ssl.certificate.location"] = self.ssl_certificate_location
+            if self.ssl_key_location:
+                config["ssl.key.location"] = self.ssl_key_location
+            if self.ssl_key_password:
+                config["ssl.key.password"] = self.ssl_key_password
+            config["ssl.check.hostname"] = str(self.ssl_check_hostname).lower()
+            
+            # Map ssl_verify_mode to SSL endpoint identification algorithm
+            if self.ssl_verify_mode == "none":
+                config["ssl.endpoint.identification.algorithm"] = "none"
+            elif self.ssl_verify_mode == "optional":
+                config["ssl.endpoint.identification.algorithm"] = "https"
+            else:  # required
+                config["ssl.endpoint.identification.algorithm"] = "https"
+        
+        # Only return non-empty values
+        return {k: v for k, v in config.items() if v}
 
 
 @dataclass

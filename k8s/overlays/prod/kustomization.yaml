@@ -1,0 +1,110 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: bytewax-pipeline-prod
+  annotations:
+    description: "Production environment configuration for Bytewax pipeline"
+
+# Include base configuration
+resources:
+- ../../base
+
+# Namespace for production
+namespace: bytewax-pipeline-prod
+
+# Name prefix for prod resources
+namePrefix: prod-
+
+# Common labels for production environment
+commonLabels:
+  environment: production
+  team: data-engineering
+  criticality: high
+
+# Images with specific version tags for production
+images:
+- name: bytewax-pipeline
+  newTag: v1.0.0
+- name: bytewax-publisher
+  newTag: v1.0.0
+- name: bytewax-populator
+  newTag: v1.0.0
+
+# Patches for production environment
+patches:
+# Increase resource requirements for production
+- patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/resources/requests/memory
+      value: 1Gi
+    - op: replace
+      path: /spec/template/spec/containers/0/resources/requests/cpu
+      value: 1000m
+    - op: replace
+      path: /spec/template/spec/containers/0/resources/limits/memory
+      value: 4Gi
+    - op: replace
+      path: /spec/template/spec/containers/0/resources/limits/cpu
+      value: 4000m
+  target:
+    kind: Deployment
+    name: bytewax-pipeline
+
+# Increase HPA settings for production
+- patch: |-
+    - op: replace
+      path: /spec/minReplicas
+      value: 4
+    - op: replace
+      path: /spec/maxReplicas
+      value: 16
+    - op: replace
+      path: /spec/metrics/0/resource/target/averageUtilization
+      value: 60
+  target:
+    kind: HorizontalPodAutoscaler
+    name: bytewax-pipeline-hpa
+
+# Production replicas
+- patch: |-
+    - op: replace
+      path: /spec/replicas
+      value: 4
+  target:
+    kind: Deployment
+    name: bytewax-pipeline
+
+# Production-specific config
+configMapGenerator:
+- name: bytewax-config-prod
+  literals:
+  - LOG_LEVEL=INFO
+  - RECORDS_PER_SECOND=1000
+  - CACHE_TTL_SECONDS=600
+  - KAFKA_BOOTSTRAP_SERVERS=pkc-YYYYY.us-west-2.aws.confluent.cloud:9092
+  - PIPELINE_WORKERS=4
+
+# Add production monitoring annotations
+- patch: |-
+    - op: add
+      path: /metadata/annotations/monitoring.alert
+      value: "true"
+    - op: add
+      path: /metadata/annotations/monitoring.severity
+      value: "critical"
+  target:
+    kind: Deployment
+    name: bytewax-pipeline
+
+# Production security patches
+- patch: |-
+    - op: add
+      path: /spec/template/spec/securityContext/supplementalGroups
+      value: [1001]
+    - op: replace
+      path: /spec/template/spec/containers/0/securityContext/readOnlyRootFilesystem
+      value: true
+  target:
+    kind: Deployment
+    name: bytewax-pipeline

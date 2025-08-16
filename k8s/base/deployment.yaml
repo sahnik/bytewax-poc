@@ -1,0 +1,145 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bytewax-pipeline
+  namespace: bytewax-pipeline
+  labels:
+    app.kubernetes.io/name: bytewax-pipeline
+    app.kubernetes.io/component: data-processor
+    app.kubernetes.io/version: "1.0.0"
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: bytewax-pipeline
+      app.kubernetes.io/component: data-processor
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bytewax-pipeline
+        app.kubernetes.io/component: data-processor
+        app.kubernetes.io/version: "1.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      # OpenShift security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      
+      containers:
+      - name: bytewax-pipeline
+        image: bytewax-pipeline:latest
+        imagePullPolicy: Always
+        
+        ports:
+        - name: metrics
+          containerPort: 8000
+          protocol: TCP
+        
+        # Environment variables from ConfigMap
+        envFrom:
+        - configMapRef:
+            name: bytewax-config
+        - secretRef:
+            name: bytewax-kafka-credentials
+        
+        # Resource limits and requests
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        
+        # Security context for container
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false  # Bytewax needs to write temp files
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          capabilities:
+            drop:
+            - ALL
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: metrics
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: metrics
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        # Startup probe for slow-starting applications
+        startupProbe:
+          httpGet:
+            path: /health
+            port: metrics
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        
+        # Volume mounts for certificates
+        volumeMounts:
+        - name: kafka-certs
+          mountPath: /app/certs
+          readOnly: true
+        - name: cache-volume
+          mountPath: /app/cache
+        
+        # Graceful shutdown
+        terminationGracePeriodSeconds: 30
+      
+      volumes:
+      - name: kafka-certs
+        secret:
+          secretName: bytewax-kafka-certs
+          defaultMode: 0400  # Read-only for owner
+      - name: cache-volume
+        emptyDir:
+          sizeLimit: 1Gi
+      
+      # Restart policy
+      restartPolicy: Always
+      
+      # Termination grace period
+      terminationGracePeriodSeconds: 30
+      
+      # Node affinity (optional - for scheduling preferences)
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - bytewax-pipeline
+              topologyKey: kubernetes.io/hostname

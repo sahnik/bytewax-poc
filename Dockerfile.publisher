@@ -1,0 +1,70 @@
+# Data Publisher Dockerfile
+# Utility container for publishing sample data to Kafka
+
+# ===== BUILD STAGE =====
+FROM python:3.12-slim as builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    librdkafka-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# ===== PRODUCTION STAGE =====
+FROM python:3.12-slim as production
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    PATH="/opt/venv/bin:$PATH"
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    librdkafka1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy virtual environment
+COPY --from=builder /opt/venv /opt/venv
+
+# Create non-root user for OpenShift
+RUN groupadd -g 1001 publisher && \
+    useradd -u 1001 -g publisher -m -s /bin/bash publisher
+
+# Create application directory
+WORKDIR /app
+
+# Copy application code
+COPY --chown=1001:1001 config/ ./config/
+COPY --chown=1001:1001 utils/data_publisher.py ./utils/data_publisher.py
+COPY --chown=1001:1001 utils/__init__.py ./utils/__init__.py
+
+# Switch to non-root user
+USER 1001
+
+# Default command - can be overridden in K8s
+CMD ["python", "utils/data_publisher.py", "--rate", "10"]
+
+# Metadata labels
+LABEL name="bytewax-publisher" \
+      version="1.0.0" \
+      description="Data publisher utility for Bytewax pipeline testing" \
+      maintainer="Claude AI Assistant" \
+      io.k8s.description="Publishes sample data to Kafka for pipeline testing" \
+      io.k8s.display-name="Bytewax Data Publisher" \
+      io.openshift.tags="bytewax,kafka,data-generator,testing"

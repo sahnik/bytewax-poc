@@ -317,6 +317,9 @@ def create_dataflow() -> Dataflow:
             # Performance tuning: Reduced from 500ms default for faster completion
             "fetch.wait.max.ms": str(config.kafka.fetch_max_wait_ms),  # 100ms
             "fetch.min.bytes": str(config.kafka.fetch_min_bytes),     # 1 byte
+            
+            # Security configuration for external Kafka
+            **config.kafka.get_security_config()
         }
     )
     
@@ -338,6 +341,9 @@ def create_dataflow() -> Dataflow:
             # Same performance tuning as main stream
             "fetch.wait.max.ms": str(config.kafka.fetch_max_wait_ms),
             "fetch.min.bytes": str(config.kafka.fetch_min_bytes),
+            
+            # Security configuration for external Kafka
+            **config.kafka.get_security_config()
         }
     )
     
