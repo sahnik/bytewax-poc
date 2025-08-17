@@ -310,9 +310,15 @@ def create_dataflow() -> Dataflow:
         add_config={
             # Consumer group settings for offset management
             "group.id": config.kafka.consumer_group_main,
+            "client.id": f"bytewax-main-{os.environ.get('POD_NAME', os.environ.get('HOSTNAME', 'worker'))}",
             "auto.offset.reset": config.kafka.auto_offset_reset_main,  # latest/earliest
             "enable.auto.commit": str(config.kafka.auto_commit_enabled).lower(),
             "auto.commit.interval.ms": str(config.kafka.auto_commit_interval_ms),
+            
+            # Consumer group coordination settings
+            "session.timeout.ms": "30000",     # 30 seconds for group coordination
+            "heartbeat.interval.ms": "10000",  # 10 seconds heartbeat
+            "max.poll.interval.ms": "300000",  # 5 minutes max between polls
             
             # Performance tuning: Reduced from 500ms default for faster completion
             "fetch.wait.max.ms": str(config.kafka.fetch_max_wait_ms),  # 100ms
@@ -334,9 +340,15 @@ def create_dataflow() -> Dataflow:
         add_config={
             # Separate consumer group for lookup data
             "group.id": config.kafka.consumer_group_lookup,
+            "client.id": f"bytewax-lookup-{os.environ.get('HOSTNAME', 'unknown')}",
             "auto.offset.reset": config.kafka.auto_offset_reset_lookup,  # earliest
             "enable.auto.commit": str(config.kafka.auto_commit_enabled).lower(),
             "auto.commit.interval.ms": str(config.kafka.auto_commit_interval_ms),
+            
+            # Consumer group coordination settings
+            "session.timeout.ms": "30000",     # 30 seconds for group coordination
+            "heartbeat.interval.ms": "10000",  # 10 seconds heartbeat
+            "max.poll.interval.ms": "300000",  # 5 minutes max between polls
             
             # Same performance tuning as main stream
             "fetch.wait.max.ms": str(config.kafka.fetch_max_wait_ms),

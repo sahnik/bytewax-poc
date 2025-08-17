@@ -48,6 +48,13 @@ spec:
         - secretRef:
             name: bytewax-kafka-credentials
         
+        # Pod-specific environment variables
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        
         # Resource limits and requests
         resources:
           requests:

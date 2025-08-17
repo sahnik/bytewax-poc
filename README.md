@@ -447,11 +447,166 @@ The pipeline processes rich event data with **~150 fields** including:
   },
   "_enrichment_metadata": {
     "enriched_at": "2024-01-15T10:30:01.456Z",
-    "lookup_key": "user_12345",
-    "enriched": true
+    "cache_hit": true,
+    "enrichment_latency_ms": 2.1
   }
 }
 ```
+
+## OpenShift/Kubernetes Deployment
+
+This project includes complete OpenShift/Kubernetes deployment configurations for cloud-native deployment.
+
+### Prerequisites
+
+- **Red Hat OpenShift** (Sandbox, Online, or enterprise cluster)
+- **Confluent Cloud** Kafka cluster with API key/secret
+- **OpenShift CLI** (`oc`) installed locally
+
+### Quick Deployment to OpenShift Sandbox
+
+See [OCP-SETUP.md](./OCP-SETUP.md) for detailed setup instructions.
+
+1. **Setup Confluent Cloud:**
+   ```bash
+   # Create topics in Confluent Cloud console:
+   # - input-topic (8 partitions)
+   # - output-topic (8 partitions) 
+   # - lookup-topic (1 partition, compacted)
+   # - error-topic (8 partitions)
+   
+   # Generate API Key and Secret from Confluent Cloud console
+   ```
+
+2. **Build and deploy to OpenShift:**
+   ```bash
+   # Login to your OpenShift cluster
+   oc login --token=<your-token> --server=<your-cluster>
+   
+   # Create project
+   oc new-project sahnik-dev
+   
+   # Create binary build
+   oc new-build --strategy docker --name=bytewax-pipeline --binary=true
+   
+   # Build from local source
+   mv Dockerfile.pipeline Dockerfile
+   oc start-build bytewax-pipeline --from-dir=. --follow
+   mv Dockerfile Dockerfile.pipeline
+   
+   # Create Confluent Cloud credentials secret
+   oc create secret generic bytewax-kafka-credentials \
+     --from-literal=KAFKA_SASL_USERNAME="<your-api-key>" \
+     --from-literal=KAFKA_SASL_PASSWORD="<your-api-secret>"
+   
+   # Deploy the pipeline
+   oc apply -k k8s/overlays/dev
+   ```
+
+3. **Monitor the deployment:**
+   ```bash
+   # Check pod status
+   oc get pods
+   
+   # View logs
+   oc logs -f deployment/dev-bytewax-pipeline
+   
+   # Check metrics
+   oc port-forward service/dev-bytewax-pipeline-metrics 8000:8000
+   curl http://localhost:8000/metrics
+   ```
+
+### Key Kubernetes Resources
+
+#### Core Deployment
+- **Deployment**: 2 replicas with 1 Bytewax worker each for proper Kafka consumer group coordination
+- **ConfigMap**: Environment variables and Kafka configuration
+- **Secret**: Confluent Cloud API credentials
+- **Services**: Headless service for discovery, metrics service for monitoring
+
+#### Networking & Security
+- **NetworkPolicy**: Allows egress to Confluent Cloud and ingress for metrics
+- **SecurityContext**: Non-root containers with minimal privileges
+- **Resource Limits**: CPU and memory constraints for sandbox compatibility
+
+#### Monitoring
+- **ServiceMonitor**: Prometheus metrics scraping configuration
+- **Metrics Port**: 8000 for application metrics
+
+### Common Operations
+
+#### Scaling
+```bash
+# Scale workers (affects partition assignment)
+oc scale deployment dev-bytewax-pipeline --replicas=3
+
+# Update worker count per pod (rebuild required)
+# Edit k8s/overlays/dev/kustomization.yaml
+# Set PIPELINE_WORKERS: "1" (recommended for Kafka consumer groups)
+```
+
+#### Monitoring
+```bash
+# View real-time logs
+oc logs -f deployment/dev-bytewax-pipeline -n sahnik-dev
+
+# Check consumer group status in Confluent Cloud console
+
+# Port forward for metrics access
+oc port-forward service/dev-bytewax-pipeline-metrics 8000:8000 -n sahnik-dev
+
+# View resource usage
+oc top pods -n sahnik-dev
+```
+
+#### Debugging
+```bash
+# Check pod details
+oc describe pod <pod-name> -n sahnik-dev
+
+# Check events
+oc get events --sort-by='.lastTimestamp' -n sahnik-dev
+
+# Test network connectivity from pod
+oc exec -it deployment/dev-bytewax-pipeline -n sahnik-dev -- python3 -c "import socket; print(socket.gethostbyname('pkc-xxxxx.us-east-2.aws.confluent.cloud'))"
+
+# Check environment variables
+oc exec -it deployment/dev-bytewax-pipeline -n sahnik-dev -- env | grep KAFKA
+```
+
+#### Rebuilding
+```bash
+# Rebuild with latest code changes
+mv Dockerfile.pipeline Dockerfile
+oc start-build bytewax-pipeline --from-dir=. --follow
+mv Dockerfile Dockerfile.pipeline
+
+# Restart deployment (with namespace)
+oc rollout restart deployment/dev-bytewax-pipeline -n sahnik-dev
+
+# Monitor rollout
+oc rollout status deployment/dev-bytewax-pipeline -n sahnik-dev
+```
+
+### Production Considerations
+
+- **Resource Scaling**: Increase CPU/memory limits for higher throughput
+- **HPA**: Enable HorizontalPodAutoscaler for automatic scaling (disabled in sandbox)
+- **Persistent Volumes**: For stateful components if needed
+- **Monitoring**: Integrate with cluster monitoring (Prometheus/Grafana)
+- **Security**: Use dedicated service accounts and RBAC
+- **Multi-AZ**: Deploy across multiple availability zones
+- **Backup**: Implement data backup and disaster recovery
+
+### Kafka Consumer Group Architecture
+
+The deployment uses a careful consumer group setup to avoid duplicate processing:
+- **2 pod replicas** × **1 Bytewax worker per pod** = **2 consumers**
+- **8 Kafka partitions** → **4 partitions per consumer**
+- **Unique client.id per pod** using hostname for proper coordination
+- **Consumer group coordination** with proper timeouts and heartbeats
+
+This ensures each message is processed exactly once while maintaining horizontal scalability.
 
 ## Monitoring
 

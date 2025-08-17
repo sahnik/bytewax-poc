@@ -78,3 +78,4 @@ patchesStrategicMerge:
     KAFKA_BOOTSTRAP_SERVERS: "pkc-921jm.us-east-2.aws.confluent.cloud:9092"
     KAFKA_SECURITY_PROTOCOL: "SASL_SSL"
     KAFKA_SASL_MECHANISM: "PLAIN"
+    PIPELINE_WORKERS: "1"
