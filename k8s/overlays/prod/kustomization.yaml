@@ -17,10 +17,11 @@ namespace: bytewax-pipeline-prod
 namePrefix: prod-
 
 # Common labels for production environment
-commonLabels:
-  environment: production
-  team: data-engineering
-  criticality: high
+labels:
+- pairs:
+    environment: production
+    team: data-engineering
+    criticality: high
 
 # Images with specific version tags for production
 images:

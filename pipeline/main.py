@@ -395,7 +395,8 @@ def create_dataflow() -> Dataflow:
                            lambda msg: msg.topic == config.kafka.sink_topic or msg.topic is None)
     kop.output("kafka-main-output", main_output, 
               brokers=config.kafka.brokers, 
-              topic=config.kafka.sink_topic)  # 8 partitions for parallel consumption
+              topic=config.kafka.sink_topic,
+              add_config=config.kafka.get_security_config())  # 8 partitions for parallel consumption
     
     # Error output topic: Failed records with error details
     # Dead letter queue for records that failed processing at any stage
@@ -403,7 +404,8 @@ def create_dataflow() -> Dataflow:
                             lambda msg: msg.topic == config.kafka.error_topic)
     kop.output("kafka-error-output", error_output,
               brokers=config.kafka.brokers,
-              topic=config.kafka.error_topic)  # 1 partition (errors are less frequent)
+              topic=config.kafka.error_topic,
+              add_config=config.kafka.get_security_config())  # 1 partition (errors are less frequent)
     
     logger.info("Dataflow created successfully")
     return flow

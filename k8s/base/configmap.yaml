@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/component: config
 data:
   # Confluent Cloud Kafka Configuration (non-sensitive)
-  KAFKA_BOOTSTRAP_SERVERS: "pkc-XXXXX.us-east-1.aws.confluent.cloud:9092"
+  KAFKA_BOOTSTRAP_SERVERS: "pkc-921jm.us-east-2.aws.confluent.cloud:9092"
   KAFKA_SOURCE_TOPIC: "input-topic"
   KAFKA_SINK_TOPIC: "output-topic"
   KAFKA_LOOKUP_TOPIC: "lookup-topic"

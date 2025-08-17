@@ -29,31 +29,10 @@ spec:
     - protocol: TCP
       port: 8000
   
-  # Egress rules - allow external Kafka and DNS
+  # Egress rules - allow all external traffic for sandbox compatibility
   egress:
-  # Allow DNS resolution
+  # Allow all external traffic (simplified for sandbox)
   - to: []
-    ports:
-    - protocol: UDP
-      port: 53
-    - protocol: TCP
-      port: 53
-  
-  # Allow external Kafka brokers (adjust IPs/ports as needed)
-  - to: []
-    ports:
-    - protocol: TCP
-      port: 9092  # Standard Kafka port
-    - protocol: TCP
-      port: 9093  # SSL Kafka port
-    - protocol: TCP
-      port: 9094  # SASL_SSL Kafka port
-  
-  # Allow HTTPS for certificate validation and external services
-  - to: []
-    ports:
-    - protocol: TCP
-      port: 443
   
   # Allow internal cluster communication
   - to:

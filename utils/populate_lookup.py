@@ -88,12 +88,25 @@ class LookupDataGenerator:
 class LookupDataPublisher:
     """Publishes lookup data to Kafka topic."""
     
-    def __init__(self, brokers: List[str], topic: str):
-        self.topic = topic
-        self.producer = Producer({
-            'bootstrap.servers': ','.join(brokers),
+    def __init__(self, config):
+        self.topic = config.kafka.lookup_topic
+        
+        # Build producer configuration with security settings
+        producer_config = {
+            'bootstrap.servers': ','.join(config.kafka.brokers),
             'client.id': 'lookup-data-publisher'
-        })
+        }
+        
+        # Add security configuration if present
+        if hasattr(config.kafka, 'security_protocol') and config.kafka.security_protocol != 'PLAINTEXT':
+            producer_config.update({
+                'security.protocol': config.kafka.security_protocol,
+                'sasl.mechanism': config.kafka.sasl_mechanism,
+                'sasl.username': config.kafka.sasl_username,
+                'sasl.password': config.kafka.sasl_password
+            })
+        
+        self.producer = Producer(producer_config)
         self.generator = LookupDataGenerator()
     
     def delivery_report(self, err, msg):
@@ -228,13 +241,16 @@ def main():
     
     # Load configuration
     config = get_config()
-    topic = args.topic or config.kafka.lookup_topic
+    
+    # Override topic if specified
+    if args.topic:
+        config.kafka.lookup_topic = args.topic
     
     # Create publisher
-    publisher = LookupDataPublisher(config.kafka.brokers, topic)
+    publisher = LookupDataPublisher(config)
     
     logger.info("Starting lookup data population", 
-               topic=topic,
+               topic=config.kafka.lookup_topic,
                brokers=config.kafka.brokers)
     
     try:

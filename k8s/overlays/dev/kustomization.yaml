@@ -9,18 +9,18 @@ metadata:
 # Include base configuration
 resources:
 - ../../base
-- ../../jobs
 
-# Namespace override for dev
-namespace: bytewax-pipeline-dev
+# Namespace override for dev (use your sandbox project name)
+namespace: sahnik-dev
 
 # Name prefix for dev resources
 namePrefix: dev-
 
 # Common labels for dev environment
-commonLabels:
-  environment: development
-  team: data-engineering
+labels:
+- pairs:
+    environment: development
+    team: data-engineering
 
 # Images with dev tags
 images:
@@ -63,24 +63,18 @@ patches:
     kind: HorizontalPodAutoscaler
     name: bytewax-pipeline-hpa
 
-# Add dev-specific config for Confluent Cloud
-configMapGenerator:
-- name: bytewax-config-dev
-  literals:
-  - LOG_LEVEL=DEBUG
-  - RECORDS_PER_SECOND=50
-  - CACHE_TTL_SECONDS=120
-  - KAFKA_BOOTSTRAP_SERVERS=pkc-XXXXX.us-east-1.aws.confluent.cloud:9092
-
-# Merge the dev config with base config
-replacements:
-- source:
-    kind: ConfigMap
-    name: bytewax-config-dev
-    fieldPath: data
-  targets:
-  - select:
-      kind: ConfigMap
-      name: bytewax-config
-    fieldPaths:
-    - data
+# Override the base config with dev-specific values
+patchesStrategicMerge:
+- |-
+  apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: bytewax-config
+    namespace: sahnik-dev
+  data:
+    LOG_LEVEL: "DEBUG"
+    RECORDS_PER_SECOND: "50" 
+    CACHE_TTL_SECONDS: "120"
+    KAFKA_BOOTSTRAP_SERVERS: "pkc-921jm.us-east-2.aws.confluent.cloud:9092"
+    KAFKA_SECURITY_PROTOCOL: "SASL_SSL"
+    KAFKA_SASL_MECHANISM: "PLAIN"

@@ -57,25 +57,34 @@ oc login --token=<your-token> --server=https://api.sandbox-m2.ll9k.p1.openshifta
 ## Step 3: Build and Push Container Images
 
 ### Using OpenShift BuildConfigs (Recommended)
+
+#### Option A: Binary Build from Local Directory
 ```bash
 # Create a new project for your application
-oc new-project bytewax-pipeline-dev
+oc new-project sahnik-dev
 
-# Create build configs from Dockerfiles
-oc new-build https://github.com/sahnik/bytewax-poc.git \
+# Create build config for binary builds (must use default Dockerfile name)
+oc new-build --strategy docker \
+  --name=bytewax-pipeline \
+  --binary=true
+
+# Start build from current directory  
+oc start-build bytewax-pipeline --from-dir=. --follow
+```
+
+#### Option B: Git Source Build (after pushing to GitHub)
+```bash
+# First ensure your ocp_setup branch exists and has the Dockerfiles
+git checkout -b ocp_setup
+git add .
+git commit -m "Add OpenShift deployment files"
+git push origin ocp_setup
+
+# Then create build from GitHub (pipeline only)
+oc new-build https://github.com/sahnik/bytewax-poc.git#ocp_setup \
   --context-dir=. \
   --dockerfile=Dockerfile.pipeline \
   --name=bytewax-pipeline
-
-oc new-build https://github.com/sahnik/bytewax-poc.git \
-  --context-dir=. \
-  --dockerfile=Dockerfile.publisher \
-  --name=bytewax-publisher
-
-oc new-build https://github.com/sahnik/bytewax-poc.git \
-  --context-dir=. \
-  --dockerfile=Dockerfile.populator \
-  --name=bytewax-populator
 
 # Monitor build progress
 oc logs -f bc/bytewax-pipeline
@@ -132,26 +141,25 @@ oc get pods -n sahnik-dev
 oc get services -n sahnik-dev
 
 # Check deployment status
-oc rollout status deployment/dev-bytewax-pipeline -n sahnk-dev
+oc rollout status deployment/dev-bytewax-pipeline -n sahnik-dev
 ```
 
-### Initialize Lookup Data
+### Initialize Lookup Data (Run Locally)
 ```bash
-# Run the lookup population job
-oc create job --from=job/populate-lookup-data populate-lookup-init -n sahnik-dev
+# Populate lookup data from your local machine
+python utils/populate_lookup.py --count 1000
 
-# Monitor job completion
-oc logs -f job/populate-lookup-init -n sahnik-dev
+# Verify topics in Confluent Cloud console
 ```
 
 ## Step 6: Test the Pipeline
 
-### Generate Test Data
+### Generate Test Data (Run Locally)
 ```bash
-# Run test data publisher job
-oc create job --from=job/test-data-publisher test-publisher-run -n bytewax-pipeline-dev
+# Run data publisher from your local machine  
+python utils/data_publisher.py --rate 100 --duration 300
 
-# Monitor data flow
+# Monitor pipeline logs in OpenShift
 oc logs -f deployment/dev-bytewax-pipeline -n sahnik-dev
 ```
 

@@ -137,7 +137,7 @@ class KafkaConfig:
                 config["ssl.key.location"] = self.ssl_key_location
             if self.ssl_key_password:
                 config["ssl.key.password"] = self.ssl_key_password
-            config["ssl.check.hostname"] = str(self.ssl_check_hostname).lower()
+            # Note: ssl.check.hostname is not used with SASL_SSL for Confluent Cloud
             
             # Map ssl_verify_mode to SSL endpoint identification algorithm
             if self.ssl_verify_mode == "none":

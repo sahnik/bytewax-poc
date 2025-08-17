@@ -29,18 +29,11 @@ spec:
         prometheus.io/port: "8000"
         prometheus.io/path: "/metrics"
     spec:
-      # OpenShift security context
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1001
-        runAsGroup: 1001
-        fsGroup: 1001
-        seccompProfile:
-          type: RuntimeDefault
+      # OpenShift will automatically assign appropriate security context
       
       containers:
       - name: bytewax-pipeline
-        image: bytewax-pipeline:latest
+        image: image-registry.openshift-image-registry.svc:5000/sahnik-dev/bytewax-pipeline:latest
         imagePullPolicy: Always
         
         ports:
@@ -64,13 +57,11 @@ spec:
             memory: "2Gi"
             cpu: "2000m"
         
-        # Security context for container
+        # Security context for container (minimal for OpenShift compatibility)
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: false  # Bytewax needs to write temp files
           runAsNonRoot: true
-          runAsUser: 1001
-          runAsGroup: 1001
           capabilities:
             drop:
             - ALL
@@ -104,11 +95,8 @@ spec:
           timeoutSeconds: 5
           failureThreshold: 30
         
-        # Volume mounts for certificates
+        # Volume mounts
         volumeMounts:
-        - name: kafka-certs
-          mountPath: /app/certs
-          readOnly: true
         - name: cache-volume
           mountPath: /app/cache
         
@@ -116,10 +104,6 @@ spec:
         terminationGracePeriodSeconds: 30
       
       volumes:
-      - name: kafka-certs
-        secret:
-          secretName: bytewax-kafka-certs
-          defaultMode: 0400  # Read-only for owner
       - name: cache-volume
         emptyDir:
           sizeLimit: 1Gi

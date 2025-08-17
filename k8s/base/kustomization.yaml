@@ -7,9 +7,10 @@ metadata:
     description: "Base Kubernetes manifests for Bytewax data pipeline"
 
 # Common labels applied to all resources
-commonLabels:
-  app.kubernetes.io/name: bytewax-pipeline
-  app.kubernetes.io/managed-by: kustomize
+labels:
+- pairs:
+    app.kubernetes.io/name: bytewax-pipeline
+    app.kubernetes.io/managed-by: kustomize
 
 # Common annotations applied to all resources
 commonAnnotations:
@@ -17,13 +18,12 @@ commonAnnotations:
 
 # Resources to include
 resources:
-- namespace.yaml
 - configmap.yaml
 - deployment.yaml
 - service.yaml
 - servicemonitor.yaml
 - networkpolicy.yaml
-- hpa.yaml
+# - hpa.yaml  # Disabled for sandbox - metrics server issues
 
 # Image transformations
 images:
@@ -34,8 +34,8 @@ images:
 - name: bytewax-populator
   newTag: latest
 
-# Namespace for all resources
-namespace: bytewax-pipeline
+# Namespace for all resources (will be overridden by overlays)
+namespace: sahnik-dev
 
 # Patches for common modifications
 patches:
